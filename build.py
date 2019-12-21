@@ -14,55 +14,48 @@ from shutil import copy
 #  - `output`
 # to the decorated functions.
 
+# Mark a function with an attribute of a given value
+def extra(attr, val):
+    def extra_1(func):
+        func.__dict__[attr] = val
+        return func
+    return extra_1
+
+# Return a decorator function for marking things with a given attribute
+def new_decor_attr(attr):
+    def decor_attr_1(val):
+        def decor_attr(func):
+            func.__dict__[attr] = val
+            return func
+        return decor_attr
+    return decor_attr_1
+
+def new_decor_passing_attr(attr, pass_name = None):
+    def decor_attr_1(val):
+        def decor_attr(func):
+            def decored_func(*arg, **kwarg):
+                kwarg[attr if pass_name is None else pass_name] = val
+                return func(*arg, **kwarg)
+            decored_func.__dict__ = func.__dict__
+            decored_func.__dict__[attr] = val
+            return decored_func
+        return decor_attr
+    return decor_attr_1
+
 # Provide for annotation of task's dependencies
-def dependent(deps):
-    def dependent_1(func):
-        def dep_func(*a, **b):
-            b['deps'] = deps
-            return func(*a, **b)
-        dep_func.deps = deps
-        if hasattr(func, 'partial_deps'):
-            dep_func.partial_deps = func.partial_deps
-        if hasattr(func, 'out'):
-            dep_func.out = func.out
-        return dep_func
-    return dependent_1
+dependent = new_decor_passing_attr("deps")
 
 # Dependencies that a task can finish without, but should update for
-def partial_dependent(deps):
-    def partial_dependent_1(func):
-        def partial_dep_func(*a, **b):
-            b['partial_deps'] = deps
-            return func(*a, **b)
-        partial_dep_func.partial_deps = deps
-        if hasattr(func, 'deps'):
-            partial_dep_func.deps = func.deps
-        if hasattr(func, 'out'):
-            partial_dep_func.out = func.out
-        return partial_dep_func
-    return partial_dependent_1
+partial_dependent = new_decor_passing_attr("partial_deps")
 
 # Information about output
 # Note that this is for convenience only, and is not used in the build graph
 # This will pass a keyword argument `output` to the decorated function.
 # This will also set an attribute `out` on the decorated function.
-def output(out):
-    def output_1(func):
-        def output_func(*a, **b):
-            b['output'] = out
-            return func(*a, **b)
-        output_func.out = out
-        # Preserve wrapped function's special attributes
-        if hasattr(func, 'deps'):
-            output_func.deps = func.deps
-        if hasattr(func, 'partial_deps'):
-            output_func.partial_deps = func.partial_deps
-        return output_func
-    return output_1
+output = new_decor_passing_attr("out", pass_name = "output")
 
 # Composable join of delayed evaluation commands
 # Guarantees evaluation order
-# TODO: Preserve deps
 # TODO: Decide what to execute based on deps
 def seq_join(*arg):
     def seq_joined():
@@ -75,17 +68,24 @@ def seq_join(*arg):
                 if not result:
                     return False
         return True
+    seq_joined.deps = [x.deps for x in filter(lambda x: hasattr(x, 'deps'), arg)]
+    seq_joined.partial_deps = [x.partial_deps for x in filter(lambda x: hasattr(x, 'partial_deps'), arg)]
     return seq_joined
 
 # Composable join of delayed evaluation commands
 # Does not guarantee evaluation order
 # Does guarantee exit status list order
-# TODO: Preserve deps
 # TODO: Decide what to execute based on deps
 def par_join(*arg):
     def par_joined():
         return [a() for a in arg]
+    par_joined.deps = [x.deps for x in filter(lambda x: hasattr(x, 'deps'), arg)]
+    par_joined.partial_deps = [x.partial_deps for x in filter(lambda x: hasattr(x, 'partial_deps'), arg)]
     return par_joined
+
+# There exists an intermediate, unimplemented, abstraction between these two kinds of join:
+# A sequential join in which the exit status of previous tasks is passed to each task as input.
+# This remains unimplemented because I haven't need of it here.
 
 # Delayed evaluation shell command
 def sh(cmd):
