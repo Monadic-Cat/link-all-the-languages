@@ -49,7 +49,6 @@ dependent = new_decor_passing_attr("deps")
 partial_dependent = new_decor_passing_attr("partial_deps")
 
 # Information about output
-# Note that this is for convenience only, and is not used in the build graph
 # This will pass a keyword argument `output` to the decorated function.
 # This will also set an attribute `out` on the decorated function.
 output = new_decor_passing_attr("out", pass_name = "output")
